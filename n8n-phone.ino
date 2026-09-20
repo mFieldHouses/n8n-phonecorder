@@ -318,7 +318,7 @@ void loop() {
 
         enablePlaybackMode();
 
-        musicPlayer.setPlaySpeed(10);
+        musicPlayer.setPlaySpeed(20); // TODO remove this
         musicPlayer.startPlayingFile(PICKUP_SOUND_PATH);
 
         phone_state = PhoneState::PLAYING;
@@ -327,12 +327,13 @@ void loop() {
 // 
         // Try uploading feedback recordings that haven't been uploaded yet
         
-        // phone_state = PhoneState::UPLOADING;
+        phone_state = PhoneState::UPLOADING;
 
         // Check if we are allowed to reattempt upload according to the timeout
         if (reattempt_upload_timeout > 0) {
           reattempt_upload_timeout -= 1;
           delay(1);
+          phone_state = PhoneState::IDLE;
           break;
         }
 
@@ -379,7 +380,9 @@ void loop() {
             break;
           }
 
-          musicPlayer.sineTest(120, 1000);
+          // musicPlayer.sineTest(105, 1000);
+
+          // delay(1200);
 
           // Compose filename according to current time and date
           String filename = String("/recorded/") + getTimeStampString() + String(".OGG");
@@ -407,6 +410,8 @@ void loop() {
 
 
     case PhoneState::RECORDING: {
+
+      // SPRINTLN("recording");
 
       if (horn_picked_up) { // If we are currently recording feedback and the phone horn is still picked up
         saveRecordedData(true);
