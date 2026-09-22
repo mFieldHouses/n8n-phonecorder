@@ -54,6 +54,8 @@ A status message follows a certain structure:
 }
 ```
 
+When the phone is not palying or recording sound, it will not generate the full status report, as doing so can cause audible hiccups.
+
 ## Output Log
 The phone publishes a simple copy of its serial output to _\<hostname\>/output_. This log contains some additional information about the phones’ functioning. It is possible to disable this log for extra safety regarding memory overflow crashes.
 
