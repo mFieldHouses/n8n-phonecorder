@@ -6,4 +6,4 @@ Requirements to build:
 1. ESP32 boards package by Espressif Systems
 2. Adafruit_VS1053 library
 
-You can read the full usage instructions [here](https://github.com/mFieldHouses/n8n-phonecorder/INSTRUCTIONS.md).
+You can read the full usage instructions [here](https://github.com/mFieldHouses/n8n-phonecorder/blob/main/INSTRUCTIONS.md).
