@@ -1,0 +1,2 @@
+ssid=<wifi network name>
+password=<wifi network password>
