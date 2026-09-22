@@ -20,11 +20,15 @@
 #define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3" // POSIX timezone
 #define PHONE_HOSTNAME "n8n-pink-phone"
 
-#define UPLOAD_REATTEMPT_TIMEOUT 2000 // in ms
+#define UPLOAD_REATTEMPT_TIMEOUT 2000 // in ms. How long the phone will wait before reattempting to upload a file to the webhook after failing to upload
 
 #define RECORDING_PROFILE_PATH "/recording_profile.img" // Path to the .img file that will be used to encode .ogg files when recording
 
 #define PICKUP_SOUND_PATH "/sounds/pickup.mp3" // Path to the .mp3 file that will be played when the phone horn is picked up
+#define WIFI_ERROR_SOUND_PATH "/sounds/wifi_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to connect to a WiFi network
+#define WEBHOOK_ERROR_SOUND_PATH "/sounds/webhook_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to retrieve a webhook URL from the SD card
+#define TIME_ERROR_SOUND_PATH "/sounds/time_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to properly synchronize its internal time and date
+#define RECORDING_PLUGIN_ERROR_SOUND_PATH "/sounds/recording_error.mp3"
 
 #define DEFAULT_VOLUME 20 // The lower this number, the higher the volume
 #define NOTIFY_VOLUME 1 // Same for this
@@ -53,6 +57,9 @@
 enum PhoneState {IDLE, UPLOADING, PLAYING, RECORDING};
 PhoneState phone_state = PhoneState::IDLE;
 
+enum PhoneMode {PLAYBACK, RECORD};
+PhoneMode phone_mode = PhoneMode::PLAYBACK;
+
 // Whether the phone horn is picked up or not
 // Updated at the start of loop().
 bool horn_picked_up = false;
@@ -63,7 +70,8 @@ enum NotificationType {
   RECORDING_PLUGIN_ERROR = 2,
   WIFI_ERROR = 3, 
   FILE_ERROR = 4,
-  WEBHOOK_ERROR = 5
+  WEBHOOK_ERROR = 5,
+  TIME_ERROR = 6,
 };
 
 // Upload reattempt timeout
@@ -160,11 +168,16 @@ void handleStatusRequest() {
     result += "    \"" + str + "\",\n";
   }
   result += "  ]\n";
+
+  // space_used_percentage
+  result += "  \"space_used_percentage\": ";
+  result += String(getSDCardSpaceUsedPercentage(), 2);
+  result += ",\n";
   
   // recordings_count
-  result += "  \"recordings_count\": ";
-  result += String(getRecordedFilesCount());
-  result += "\n";
+  // result += "  \"total_recordings_count\": ";
+  // result += String(countFilesInDirectory("/recorded/", true));
+  // result += "\n";
 
   result += "}";
 
@@ -186,6 +199,17 @@ void handleLogRequest() {
   server.send(200, "text/plain; charset=utf-8", result);
 }
 
+void restart() {
+  if (phone_mode != PhoneMode::PLAYBACK) {
+    enablePlaybackMode();
+  }
+  
+  musicPlayer.setVolume(NOTIFY_VOLUME, NOTIFY_VOLUME);
+  musicPlayer.playFullFile("/sounds/restarting.mp3");
+
+  ESP.restart();
+}
+
 void setup() {
   Serial.begin(9600);
   SPRINTLN("\n====== n8n Pink Phone ======");
@@ -204,8 +228,7 @@ void setup() {
   }
   else {
     SPRINTLN("VS1053 found");
-    musicPlayer.setVolume(20, 20);
-    // Serial.println(musicPlayer.useInterrupt(VS1053_FILEPLAYER_PIN_INT));
+    musicPlayer.setVolume(DEFAULT_VOLUME, DEFAULT_VOLUME);
   }
 
   SPRINTLN();
@@ -214,13 +237,13 @@ void setup() {
   if (!SD.begin(CARDCS)) {
     SPRINTLN("SD failed, or not present. Restarting");
     speakerNotify(NotificationType::SD_CARD_ERROR);
-    ESP.restart();
+    restart();
     while (1);
   }
 
   SPRINTLN("SD Card found");
 
-  delay(500);
+  SPRINT(getSDCardSpaceUsedPercentage()); SPRINTLN("% of card used");
 
   SPRINTLN();
 
@@ -230,7 +253,7 @@ void setup() {
 
   retrieveWifiCredentials(ssid, password);
 
-  SPRINTLN("\nRetrieved WiFi credentials: ");
+  SPRINTLN("Retrieved WiFi credentials: ");
   SPRINT("SSID: "); SPRINTLN(ssid);
   SPRINT("Password: "); SPRINTLN(password);
   
@@ -248,19 +271,17 @@ void setup() {
     SPRINT(".");
 
     if (WiFi.status() == WL_CONNECT_FAILED) {
-      SPRINTLN("Could not connect to WiFi. Stalling here.");
+      SPRINTLN("Could not connect to WiFi. Restarting");
       speakerNotify(NotificationType::WIFI_ERROR);
-      while (1);
+      restart();
     }
 
     max_tries--;
 
     if (max_tries < 0) {
       SPRINTLN("Unable to find WiFi, restarting");
-
-      delay(1000);
-
-      ESP.restart();
+      speakerNotify(NotificationType::WIFI_ERROR);
+      restart();
     }
 
     delay(100);
@@ -279,12 +300,9 @@ void setup() {
   Serial.print("The time is ");
   Serial.println(&timeinfo, "%H:%M:%S");
 
-  if (timeinfo.tm_year + 1900 == 1970) {
-    SPRINTLN("Time error, restarting\n\n");
-    
-    delay(1000);
-    
-    //ESP.restart();
+  if (timeinfo.tm_year + 1900 == 1970) { // Common condition when time synchronization did not succeed
+    speakerNotify(NotificationType::TIME_ERROR);
+    restart();
   }
   
   server.on("/", HTTP_GET, handleStatusRequest);
@@ -297,7 +315,12 @@ void setup() {
   SPRINTLN("\nWebserver set up");
 
   // Put webhook URL into buffer to be used later
-  retrieveWebhookURL(webhook_url);
+  bool webhook_found = retrieveWebhookURL(webhook_url);
+
+  if (!webhook_found) {
+    speakerNotify(NotificationType::WEBHOOK_ERROR);
+    restart();
+  }
 
   SPRINT("\nRetrieved webhook url: "); SPRINTLN(webhook_url);
 
@@ -307,7 +330,10 @@ void setup() {
 void loop() {
 
   // Update whether the horn is down or not
-  horn_picked_up = digitalRead(HORN_SWITCH); 
+  horn_picked_up = digitalRead(HORN_SWITCH);
+
+  // Handle incoming HTTP requests
+  server.handleClient();
 
   switch (phone_state) {
 
@@ -324,9 +350,9 @@ void loop() {
         phone_state = PhoneState::PLAYING;
       }
       else { // Phone is idle and horn is down
-// 
+
         // Try uploading feedback recordings that haven't been uploaded yet
-        
+
         phone_state = PhoneState::UPLOADING;
 
         // Check if we are allowed to reattempt upload according to the timeout
@@ -338,27 +364,36 @@ void loop() {
         }
 
         File dir = SD.open("/recorded/");
+        File entry;
         
-        while (String(dir.name()).isEmpty() || dir.isDirectory()) { // Search through all files
-          dir = dir.openNextFile();
+        while (true) { // Search through all files
+          entry = dir.openNextFile();
+
+          if (entry.isDirectory()) {
+            continue;
+          }
+
+          if (String(entry.path()).indexOf("/uploaded/") == -1 || !entry) { // If this file is not in /recorded/uploaded/ or there is no file
+            break;
+          }
         }
 
-        if (String(dir.path()).indexOf("/uploaded/") != -1) { // Do not try to reupload files that are already in /recorded/uploaded/. For some reason dir.openNextFile() will also go into subdirectories
-          // SPRINTLN("No more files to upload");
+        if (!entry) { // If there is no file, just abort
           phone_state = PhoneState::IDLE;
+          entry.close();
           break;
         }
         
         // Whether the response to the HTTP request was 200
-        bool successful = uploadFileToWebhook(dir);
+        bool successful = uploadFileToWebhook(entry);
 
         if (successful) {
-          SPRINTLN(String("Uploading ") + String(dir.name()) + String(" was successful"));
-          markFileAsUploaded(dir);
+          SPRINTLN(String("Uploading ") + String(entry.name()) + String(" was successful"));
+          markFileAsUploaded(entry);
           phone_state = PhoneState::IDLE;
         }
         else {
-          SPRINTLN(String("Uploading ") + String(dir.name()) + String(" was unsuccessful. Will retry in at least 2 seconds"));
+          SPRINTLN(String("Uploading ") + String(entry.name()) + String(" was unsuccessful. Will retry in at least 2 seconds"));
           reattempt_upload_timeout = UPLOAD_REATTEMPT_TIMEOUT;
           phone_state = PhoneState::IDLE;
         }
@@ -376,13 +411,11 @@ void loop() {
 
         if (!musicPlayer.playingMusic) { // If the track is done playing
 
+          musicPlayer.setPlaySpeed(1); // TODO remove
+
           if (!enableRecordingMode()) {
             break;
           }
-
-          // musicPlayer.sineTest(105, 1000);
-
-          // delay(1200);
 
           // Compose filename according to current time and date
           String filename = String("/recorded/") + getTimeStampString() + String(".OGG");
@@ -425,14 +458,11 @@ void loop() {
         
         recording.close();
         phone_state = PhoneState::IDLE;
-        delay(1000);
+        delay(500);
       }
     }
     break;
   }
-
-  // Handle incoming HTTP requests
-  server.handleClient();
 }
 
 
@@ -466,9 +496,31 @@ void printDirectory(File dir, int numTabs) {
 void speakerNotify(NotificationType type) {
   musicPlayer.setVolume(NOTIFY_VOLUME, NOTIFY_VOLUME);
 
-  speakerPulses((int) type);
+  switch (type) {
+    case NotificationType::WIFI_ERROR:
+      musicPlayer.playFullFile(WIFI_ERROR_SOUND_PATH);
+      break;
+    
+    case NotificationType::WEBHOOK_ERROR:
+      musicPlayer.playFullFile(WEBHOOK_ERROR_SOUND_PATH);
+      break;
+    
+    case NotificationType::TIME_ERROR:
+      musicPlayer.playFullFile(TIME_ERROR_SOUND_PATH);
+      break;
+    
+    case NotificationType::RECORDING_PLUGIN_ERROR:
+      musicPlayer.playFullFile(RECORDING_PLUGIN_ERROR_SOUND_PATH);
+      break;
+    
+    case NotificationType::SD_CARD_ERROR:
+      speakerPulses(1);
+      delay(100);
+      break;
+  }
 
   musicPlayer.setVolume(DEFAULT_VOLUME, DEFAULT_VOLUME);
+  return;
 }
 
 // Plays a number of bleeps on the phone speaker
@@ -497,33 +549,40 @@ void retrieveWifiCredentials(String &ssid_str, String &password_str) {
 }
 
 // Retrieves the webhook URL from webhook.txt and puts it into the specified buffer
-void retrieveWebhookURL(String &webhook_url_buf) {
+bool retrieveWebhookURL(String &webhook_url_buf) {
   if (!SD.exists("/webhook.txt")) {
     speakerNotify(NotificationType::WEBHOOK_ERROR);
     webhook_file_not_found = true;
-    return;
+    return false;
   }
 
   File webhook_url_file = SD.open("/webhook.txt");
 
-  webhook_url_buf = webhook_url_file.readStringUntil((char) 10); 
+  webhook_url_buf = webhook_url_file.readStringUntil((char) 10);
+  
+  if (webhook_url_buf.isEmpty()) {
+    return false;
+  }
+  
+  return true; 
 }
 
 // Uploads a file to the webhook specified in webhook.txt
 // Returns whether the upload was successful
 bool uploadFileToWebhook(File &file) {
-  http.begin(webhook_url);
+  if (!http.begin(webhook_url)) {
+    SPRINTLN("http error");
+    return -1;
+  }
   
   String filename = String(file.name());
 
   http.addHeader("Content-Disposition", String("attachment; filename = \"") + filename + String("\""));
   http.addHeader("Content-Type", "audio/ogg");
-  
+
   int result = http.sendRequest("POST", &file, file.size());
 
   webhook_not_responding = result != 200;
-
-  SPRINT("Webhook upload result: "); SPRINTLN(result);
 
   http.end();
 
@@ -673,7 +732,6 @@ int getRecordedFilesCount() {
   Serial.println("get recorded files count"); // TODO fix this
 
   File dir = SD.open("/recorded/");
-  Serial.println(dir.getNextFileName());
   
   int count = 0;
 
@@ -692,6 +750,31 @@ int getRecordedFilesCount() {
   return count;
 }
 
+int countFilesInDirectory(String dir_path, bool recursive = false) {
+  if (!SD.exists(dir_path)) {
+    return 0;
+  }
+
+  int count = 0;
+  File dir = SD.open(dir_path);
+
+  while (1) { // Search through all files
+    // if (!dir.isDirectory()) {
+    //   count++;
+    // }
+    count++;
+    dir = dir.openNextFile();
+
+    if (!recursive && dir.isDirectory())
+
+    if (!dir.available() && !dir.isDirectory()) {
+      break;
+    }
+  }
+
+  return count;
+}
+
 // Returns how many recordings have been successfully uploaded
 int getUploadedFilesCount() {
   return -1;
@@ -699,21 +782,32 @@ int getUploadedFilesCount() {
 
 // "Enables" playback mode by just soft resetting
 void enablePlaybackMode() {
-  musicPlayer.softReset();
+  if (phone_mode != PhoneMode::PLAYBACK) {
+    musicPlayer.softReset();
+  }
+
+  phone_mode = PhoneMode::PLAYBACK;
 }
 
 // Enables recording mode by loading the plugin
 // Some internal mode is changed when this is done, making playback impossible after prepareRecordOgg() has been called
+// Returns whether the plugin has been loaded in
 bool enableRecordingMode() {
-  if (!musicPlayer.prepareRecordOgg(RECORDING_PROFILE_PATH)) {
-    SPRINTLN("Couldn't load OGG recording plugin");
-    recording_plugin_not_found = true;
-    speakerNotify(NotificationType::RECORDING_PLUGIN_ERROR);
-    return false;
+  if (phone_mode != PhoneMode::RECORD) {
+    if (!musicPlayer.prepareRecordOgg(RECORDING_PROFILE_PATH)) {
+      SPRINTLN("Couldn't load OGG recording plugin");
+      recording_plugin_not_found = true;
+      speakerNotify(NotificationType::RECORDING_PLUGIN_ERROR);
+      restart();
+      return false;
+    }
   }
-  // else {
-  //   SPRINTLN("OGG recording plugin was successfully loaded");
-  // }
+
+  phone_mode = PhoneMode::RECORD;
 
   return true;
+}
+
+float getSDCardSpaceUsedPercentage() {
+  return ((float) SD.usedBytes()) / ((float) SD.totalBytes()) * 100.0;
 }
