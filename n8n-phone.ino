@@ -12,10 +12,11 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 
-// Comment out this line to prevent log copying. Keeping log copying disabled is safer in theory, but it's not certain how big the risk of memory errors is.
-#define USE_LOG_COPYING
+#define USE_LOG_COPYING // When this is defined, log copying will be used. Comment out this line to disable log copying
+#define MAX_LOG_LINES 150 // The maximum amount of lines to remember when using log copying
 
-// Log copying will remember 200 messages at most, always including all messages until the SETUP DONE message. 
+// Log copying will remember MAX_LOG_LINES messages at most, always including all messages until the SETUP DONE message. 
+// When the line count hits MAX_LOG_LINES, the oldest message which is not part of the setup header will be removed.
 
 #define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3" // POSIX timezone
 #define PHONE_HOSTNAME "n8n-pink-phone"
@@ -25,6 +26,7 @@
 #define RECORDING_PROFILE_PATH "/recording_profile.img" // Path to the .img file that will be used to encode .ogg files when recording
 
 #define PICKUP_SOUND_PATH "/sounds/pickup.mp3" // Path to the .mp3 file that will be played when the phone horn is picked up
+#define RESTART_SOUND_PATH "/sounds/restart.mp3" // Path to the .mp3 file that will be played when the phone restarts itself
 #define WIFI_ERROR_SOUND_PATH "/sounds/wifi_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to connect to a WiFi network
 #define WEBHOOK_ERROR_SOUND_PATH "/sounds/webhook_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to retrieve a webhook URL from the SD card
 #define TIME_ERROR_SOUND_PATH "/sounds/time_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to properly synchronize its internal time and date
@@ -104,8 +106,11 @@ HTTPClient http;
 String webhook_url;
 
 // Copy of the serial communication history for display on /output
-// Will not be written to if #USE_LOG_COPYING is not defined
+#ifdef USE_LOG_COPYING
 std::vector<String> log_copy;
+int log_line_count = 0;
+int setup_header_end = -1;
+#endif
 
 // File that the microphone stream will be encoded to when recording
 File recording;
@@ -114,101 +119,28 @@ uint8_t recording_buffer[RECBUFFSIZE];
 
 // Hacky macros for log copying. Could probably just turn these into actual functions
 #ifdef USE_LOG_COPYING
-  #define SPRINTLN(x) Serial.println(x);log_copy.push_back(String(x) + "\n")
-  #define SPRINT(x) Serial.print(x);log_copy.push_back(String(x))
+  #define SPRINTLN(x) Serial.println(x);addLogLine(String(x) + "\n")
+  #define SPRINT(x) Serial.print(x);addLogLine(String(x))
 #else
   #define SPRINTLN(x) Serial.println(x);
   #define SPRINT(x) Serial.print(x);
 #endif
 
-// Returns a list of errors to be used in handleStatusRequest()
-std::vector<String> getErrors() {
 
-  // Macro to make adding new errors to this function just a tiny bit easier
-  #define ADDERR(x) result.push_back(x) 
 
-  std::vector<String> result;
-
-  if (vs1053_not_found) {
-    ADDERR("VS1053 was not found");
-  }
-  if (webhook_not_responding) {
-    ADDERR("Webhook not responding with OK code");
-  }
-  if (webhook_file_not_found) {
-    ADDERR("Webhook URL file was not found");
-  }
-  if (recording_plugin_not_found) {
-    ADDERR(String("Recording plugin image could not be found at ") + String(RECORDING_PROFILE_PATH));
-  }
-  if (pickup_mp3_missing) {
-    ADDERR("/sounds/pickup.mp3 could not be found");
-  }
-
-  return result;
-  #undef ADDERR
-}
-
-// Called when a request is made to <hostname> or <hostname>/api/status
-void handleStatusRequest() {
-
-  // Actual body to respond with
-  String result;
-
-  std::vector<String> errors = getErrors();
-
-  result += "{\n";
-
-  // status
-  result += String("  \"status\": \"") + getStatusString() + String("\"\n");
-  
-  // errors
-  result += "  \"errors\": [\n";
-  for (const String str : errors) {
-    result += "    \"" + str + "\",\n";
-  }
-  result += "  ]\n";
-
-  // space_used_percentage
-  result += "  \"space_used_percentage\": ";
-  result += String(getSDCardSpaceUsedPercentage(), 2);
-  result += ",\n";
-  
-  // recordings_count
-  // result += "  \"total_recordings_count\": ";
-  // result += String(countFilesInDirectory("/recorded/", true));
-  // result += "\n";
-
-  result += "}";
-
-  server.sendHeader("Cache-Control", "no-cache");
-  server.send(200, "text/javascript; charset=utf-8", result);
-}
-
-// Called when a request is made to <hostname>/output 
-void handleLogRequest() {
-
-  // Actual body to respond with
-  String result;
-
-  for (const String line : log_copy) {
-    result += line;
-  }
-
-  server.sendHeader("Cache-Control", "no-cache");
-  server.send(200, "text/plain; charset=utf-8", result);
-}
-
+// Restarts the ESP and plays the sound at RESTART_SOUND_PATH
 void restart() {
   if (phone_mode != PhoneMode::PLAYBACK) {
     enablePlaybackMode();
   }
   
   musicPlayer.setVolume(NOTIFY_VOLUME, NOTIFY_VOLUME);
-  musicPlayer.playFullFile("/sounds/restarting.mp3");
+  musicPlayer.playFullFile(RESTART_SOUND_PATH);
 
   ESP.restart();
 }
+
+
 
 void setup() {
   Serial.begin(9600);
@@ -301,6 +233,7 @@ void setup() {
   Serial.println(&timeinfo, "%H:%M:%S");
 
   if (timeinfo.tm_year + 1900 == 1970) { // Common condition when time synchronization did not succeed
+    SPRINTLN("Time synchronization failed, restarting");
     speakerNotify(NotificationType::TIME_ERROR);
     restart();
   }
@@ -324,11 +257,14 @@ void setup() {
 
   SPRINT("\nRetrieved webhook url: "); SPRINTLN(webhook_url);
 
-  SPRINTLN("\nSETUP DONE\n\n========================================\n\n");
+  SPRINTLN("\nSETUP DONE\n\n========================================\n");
+
+  markSetupHeaderEndLine();
 }
 
-void loop() {
 
+
+void loop() {
   // Update whether the horn is down or not
   horn_picked_up = digitalRead(HORN_SWITCH);
 
@@ -383,6 +319,8 @@ void loop() {
           entry.close();
           break;
         }
+
+        SPRINTLN(String("Starting upload of ") + String(entry.name()));
         
         // Whether the response to the HTTP request was 200
         bool successful = uploadFileToWebhook(entry);
@@ -466,6 +404,130 @@ void loop() {
 }
 
 
+
+#ifdef USE_LOG_COPYING
+
+// Adds a line to the log copy
+void addLogLine(String line) {
+  log_copy.push_back(line);
+
+  log_line_count++;
+
+  if (log_line_count > MAX_LOG_LINES) {
+    log_copy.erase(log_copy.begin() + setup_header_end + 1); // remove first line after the setup header
+    log_line_count = MAX_LOG_LINES;
+  }
+}
+
+
+
+// Marks the index of the end of the setup header for use in addLogLine()
+void markSetupHeaderEndLine() {
+  setup_header_end = log_line_count - 1;
+}
+
+#endif
+
+
+
+// Returns a list of errors to be used in handleStatusRequest()
+std::vector<String> getErrors() {
+
+  // Macro to make adding new errors to this function just a tiny bit easier
+  #define ADDERR(x) result.push_back(x) 
+
+  std::vector<String> result;
+
+  if (vs1053_not_found) {
+    ADDERR("VS1053 was not found");
+  }
+  if (webhook_not_responding) {
+    ADDERR("Webhook not responding with OK code");
+  }
+  if (webhook_file_not_found) {
+    ADDERR("Webhook URL file was not found");
+  }
+  if (recording_plugin_not_found) {
+    ADDERR(String("Recording plugin image could not be found at ") + String(RECORDING_PROFILE_PATH));
+  }
+  if (pickup_mp3_missing) {
+    ADDERR("/sounds/pickup.mp3 could not be found");
+  }
+
+  return result;
+  #undef ADDERR
+}
+
+
+
+// Called when a request is made to <hostname> or <hostname>/api/status
+void handleStatusRequest() {
+
+  // Actual body to respond with
+  String result;
+
+  std::vector<String> errors = getErrors();
+
+  result += "{\n";
+
+  // status
+  result += String("  \"status\": \"") + getStatusString() + String("\"\n");
+  
+  if (phone_state == PhoneState::IDLE || phone_state == PhoneState::UPLOADING) {
+    // errors
+    result += "  \"errors\": [\n";
+    for (const String str : errors) {
+      result += "    \"" + str + "\",\n";
+    }
+    result += "  ]\n";
+
+    // space_used_percentage
+    result += "  \"space_used_percentage\": ";
+    result += String(getSDCardSpaceUsedPercentage(), 2);
+    result += ",\n";
+    
+    // total_recordings_count
+    result += "  \"total_recordings_count\": ";
+    result += String(countFilesInDirectory("/recorded/"));
+    result += ",\n";
+
+    // uploaded_recordings_count
+    result += "  \"uploaded_recordings_count\": ";
+    result += String(countFilesInDirectory("/recorded/uploaded/"));
+    result += ",\n";
+  }
+  else {
+    result += "  \"errors\": [\n    \"Phone playing or recording sound, will not retrieve full status\"\n  ]\n";
+
+    result += "  \"space_used_percentage\": -1.0,\n";
+    result += "  \"total_recordings_count\": -1,\n";
+    result += "  \"uploaded_recordings_count\": -1,\n";
+  }
+
+  result += "}";
+
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send(200, "text/javascript; charset=utf-8", result);
+}
+
+
+
+// Called when a request is made to <hostname>/output 
+void handleLogRequest() {
+
+  // Actual body to respond with
+  String result;
+
+  for (const String line : log_copy) {
+    result += line;
+  }
+
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send(200, "text/plain; charset=utf-8", result);
+}
+
+
+
 /// File listing helper
 void printDirectory(File dir, int numTabs) {
   while (true) {
@@ -491,6 +553,8 @@ void printDirectory(File dir, int numTabs) {
     entry.close();
   }
 }
+
+
 
 // Plays a number of bleeps on the phone speaker based on the error type
 void speakerNotify(NotificationType type) {
@@ -523,6 +587,8 @@ void speakerNotify(NotificationType type) {
   return;
 }
 
+
+
 // Plays a number of bleeps on the phone speaker
 void speakerPulses(int pulse_count) {
   for (int i = 0; i < pulse_count; i++) {
@@ -530,6 +596,8 @@ void speakerPulses(int pulse_count) {
     delay(40);
   }
 }
+
+
 
 // Retrieves the WiFi credentials from wifi.txt and puts them into the specified buffers
 // This function assumes the SD is operational since it's only ever called after SD card initialization
@@ -547,6 +615,8 @@ void retrieveWifiCredentials(String &ssid_str, String &password_str) {
   ssid_str = ssid_line.substring(5); // substring starting after "ssid="
   password_str = password_line.substring(9); // substring starting after "password="
 }
+
+
 
 // Retrieves the webhook URL from webhook.txt and puts it into the specified buffer
 bool retrieveWebhookURL(String &webhook_url_buf) {
@@ -566,6 +636,8 @@ bool retrieveWebhookURL(String &webhook_url_buf) {
   
   return true; 
 }
+
+
 
 // Uploads a file to the webhook specified in webhook.txt
 // Returns whether the upload was successful
@@ -589,6 +661,8 @@ bool uploadFileToWebhook(File &file) {
   return result == 200;
 }
 
+
+
 // Forward declaration for use in markFileAsUploaded()
 void moveFile(File&, String, bool);
 
@@ -604,6 +678,8 @@ void markFileAsUploaded(File &file) {
 
   moveFile(file, destination_path, true);
 }
+
+
 
 // Moves file to the specified path
 void moveFile(File &file, String destination_path, bool remove_original = false) {
@@ -626,6 +702,8 @@ void moveFile(File &file, String destination_path, bool remove_original = false)
     SD.remove(file.path());
   }
 }
+
+
 
 // Encodes incoming microphone data into OGG file
 // Taken from record_ogg example of the VS1053 library
@@ -694,6 +772,8 @@ uint16_t saveRecordedData(boolean isrecord) {
   return written;
 }
 
+
+
 // Pads strings with 0s at their starts
 String padZero(String input) {
   if (input.length() == 1) {
@@ -703,6 +783,8 @@ String padZero(String input) {
   return input;
 }
 
+
+
 // Returns time stamp as a specifically formatted string for file names
 String getTimeStampString() {
   struct tm timeinfo;
@@ -711,6 +793,8 @@ String getTimeStampString() {
   //return padZero(String(timeinfo.tm_hour)) + padZero(String(timeinfo.tm_min)) + padZero(String(timeinfo.tm_sec));
   return String(timeinfo.tm_year + 1900) + "-" + padZero(String(timeinfo.tm_mon + 1)) + "-" + padZero(String(timeinfo.tm_mday)) + "_" + padZero(String(timeinfo.tm_hour)) + "-" + padZero(String(timeinfo.tm_min)) + "-" + padZero(String(timeinfo.tm_sec));
 }
+
+
 
 // Returns the current status as a string to be used in handleStatusRequest
 String getStatusString() {
@@ -726,6 +810,8 @@ String getStatusString() {
       return String("idle");
   }
 }
+
+
 
 // Returns how many recordings have been made in total, including uploaded files
 int getRecordedFilesCount() {
@@ -750,35 +836,37 @@ int getRecordedFilesCount() {
   return count;
 }
 
-int countFilesInDirectory(String dir_path, bool recursive = false) {
+
+
+// Returns the amount of files in the specified directory, recursively counted
+int countFilesInDirectory(String dir_path) {
   if (!SD.exists(dir_path)) {
     return 0;
   }
 
   int count = 0;
+
   File dir = SD.open(dir_path);
+  File entry;
+        
+  while (true) { // Search through all files
+    entry = dir.openNextFile();
 
-  while (1) { // Search through all files
-    // if (!dir.isDirectory()) {
-    //   count++;
-    // }
-    count++;
-    dir = dir.openNextFile();
+    if (entry.isDirectory()) {
+      continue;
+    }
 
-    if (!recursive && dir.isDirectory())
-
-    if (!dir.available() && !dir.isDirectory()) {
+    if (!entry) { // If this file is not in /recorded/uploaded/ or there is no file
       break;
     }
+
+    count++;
   }
 
   return count;
 }
 
-// Returns how many recordings have been successfully uploaded
-int getUploadedFilesCount() {
-  return -1;
-}
+
 
 // "Enables" playback mode by just soft resetting
 void enablePlaybackMode() {
@@ -788,6 +876,8 @@ void enablePlaybackMode() {
 
   phone_mode = PhoneMode::PLAYBACK;
 }
+
+
 
 // Enables recording mode by loading the plugin
 // Some internal mode is changed when this is done, making playback impossible after prepareRecordOgg() has been called
@@ -808,6 +898,9 @@ bool enableRecordingMode() {
   return true;
 }
 
+
+
+// Calculates and returns the percentage of space that is used on the SD card
 float getSDCardSpaceUsedPercentage() {
   return ((float) SD.usedBytes()) / ((float) SD.totalBytes()) * 100.0;
 }
