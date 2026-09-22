@@ -26,7 +26,7 @@
 #define RECORDING_PROFILE_PATH "/recording_profile.img" // Path to the .img file that will be used to encode .ogg files when recording
 
 #define PICKUP_SOUND_PATH "/sounds/pickup.mp3" // Path to the .mp3 file that will be played when the phone horn is picked up
-#define RESTART_SOUND_PATH "/sounds/restart.mp3" // Path to the .mp3 file that will be played when the phone restarts itself
+#define RESTART_SOUND_PATH "/sounds/restarting.mp3" // Path to the .mp3 file that will be played when the phone restarts itself
 #define WIFI_ERROR_SOUND_PATH "/sounds/wifi_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to connect to a WiFi network
 #define WEBHOOK_ERROR_SOUND_PATH "/sounds/webhook_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to retrieve a webhook URL from the SD card
 #define TIME_ERROR_SOUND_PATH "/sounds/time_error.mp3" // Path to the .mp3 file that will be played when the phone is unable to properly synchronize its internal time and date
@@ -68,12 +68,13 @@ bool horn_picked_up = false;
 
 // Notification types. Used for bleep error notifications
 enum NotificationType {
-  SD_CARD_ERROR = 1,
-  RECORDING_PLUGIN_ERROR = 2,
-  WIFI_ERROR = 3, 
-  FILE_ERROR = 4,
-  WEBHOOK_ERROR = 5,
-  TIME_ERROR = 6,
+  //TODO add READY notification and speaker sounds
+  SD_CARD_ERROR,
+  RECORDING_PLUGIN_ERROR,
+  WIFI_ERROR, 
+  FILE_ERROR,
+  WEBHOOK_ERROR,
+  TIME_ERROR
 };
 
 // Upload reattempt timeout
