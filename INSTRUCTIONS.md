@@ -54,15 +54,15 @@ A status message follows a certain structure:
 }
 ```
 
-When the phone is not palying or recording sound, it will not generate the full status report, as doing so can cause audible hiccups.
+When the phone is playing or recording sound, it will not generate the full status report, as doing so can cause audible hiccups in playback and recording.
 
 ## Output Log
-The phone publishes a simple copy of its serial output to _\<hostname\>/output_. This log contains some additional information about the phones’ functioning. It is possible to disable this log for extra safety regarding memory overflow crashes.
+The phone publishes a simple copy of its serial output to _\<hostname\>/output_. This log contains some additional information about the phones’ functioning.
 
 ## Webhook
 The phone will try to upload its recorded files to a webhook via HTTP POST requests. You can provide the phone with a link to the webhook in <b>webhook.txt</b>. 
 
-This file is expected to have a single complete URL on its first line. Both HTTP and HTTPS URLs are okay. Anything after the first line will be ignored.
+This file is expected to have a single complete URL on its first line. Anything after the first line will be ignored.
 
 The phone also expects a 200 response code. If it does not receive this, it will show the “Webhook not responding with OK code” error (See [Errors](#errrors) and [Status API](#status-api)), and any file upload that gets this response will not be marked as properly completed and will be queued for reattempt.
 
