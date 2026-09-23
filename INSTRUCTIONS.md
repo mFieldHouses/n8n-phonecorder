@@ -2,7 +2,7 @@
 
 * Arduino IDE with ESP32 boards (package by Espressif, not the Arduino one) and the Adafruit_VS1053 library installed
 * Philips screwdriver(s)
-* SD Card slot/reader
+* MicroSD card slot/reader
 * Data-enabled USB type C cable
 
 ## Quick Setup
