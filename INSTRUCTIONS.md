@@ -70,8 +70,8 @@ The phone also expects a 200 response code. If it does not receive this, it will
 When the phone powers up it will try to connect to a WiFi network using the credentials specified in <b>wifi.txt</b> on the SD Card. This file must consist of two lines and must be structured exactly as follows:
 
 ```
-ssid=\<wifi network name\>
-password=\<wifi network password\>
+ssid=<wifi network name>
+password=<wifi network password>
 ```
 
 Angle brackets and whatever they contain may be replaced by anything else.
