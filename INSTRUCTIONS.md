@@ -86,7 +86,7 @@ You can download profiles to install through [this link](https://www.vlsi.fi/fil
 ## Errors
 When the phone encounters an error, it will play a sound snippet according to what error occurred. Here is a full list of possible errors and their sounds:
 
-* **Single (repeated) beep**: SD Card error. Is the SD card inserted in the SD card slot on the VS1053 breakout board?
+* **Single beep**: SD Card error. Is the SD card inserted in the SD card slot on the VS1053 breakout board?
 
 * “**Recording Plugin Error**”: OGG Recording plugin error. Is the plugin file in the right location and is it named correctly? (See [SD Card](#sd-card))
 
