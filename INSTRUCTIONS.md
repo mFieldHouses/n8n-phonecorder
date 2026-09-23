@@ -74,7 +74,8 @@ ssid=<wifi network name>
 password=<wifi network password>
 ```
 
-Angle brackets and whatever they contain may be replaced by anything else.
+(Angle brackets and whatever they contain may be replaced by anything else.)
+
 Make sure that there are no extra unwanted spaces in either line, since those will be parsed and included in the credentials too.
 
 ## Recording
