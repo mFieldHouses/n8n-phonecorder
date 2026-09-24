@@ -15,6 +15,17 @@ Once you have the SD card plugged into your computer, you can edit the following
 
 For how to fill in these files, see [WiFi](#wifi) and [Webhook](#webhook) respectively.
 
+## General Workings
+The phone's higher level functioning is quite simple.
+
+While the horn is down, the phone is considered "idle". In this state, the phone will continuously check whether the horn is picked up or not.
+
+When the phone horn remains down, the phone will continuously look for un-uploaded feedback sound snippets. When it finds any, it will try uploading those to the specified webhook link. (See [Webhook](#webhook))
+
+When the phone horn gets picked up, the phone will start playing the pickup sound (See [SD Card](#sd-card)). The phone can be put back down during this, and in that case playback will stop and the phone will return to idle state. On the other hand, if playback is allowed to completely finish, the phone will start recording.
+
+If the phone horn is put down during recording, recording will stop. When the recorded sound snippet is shorter than 3 seconds, the snippet will be discarded automatically. Otherwise the sound snippet will be saved, marked as "un-uploaded", and the phone will return to its idle state.
+
 ## Software
 The ESP32 has already been flashed with the software it needs. In the case it is necessary to change something and/or reflash the ESP32, the source Arduino IDE project can be found [here](https://github.com/mFieldHouses/n8n-phonecorder).
 
