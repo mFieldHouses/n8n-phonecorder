@@ -12,6 +12,10 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 
+//TODO add recording timer to discard recordings smaller than 3 seconds
+//TODO add recording LED support
+//TODO add reset switch support
+
 #define USE_LOG_COPYING // When this is defined, log copying will be used. Comment out this line to disable log copying
 #define MAX_LOG_LINES 150 // The maximum amount of lines to remember when using log copying
 
