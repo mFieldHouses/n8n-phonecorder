@@ -39,6 +39,9 @@ The phone runs on an ESP32 module, the <b>Beetle ESP32-C6</b> by DFRobot. When f
 
 The “Adafruit VS1053” library is required for this project to compile correctly. Install it if you do not have it yet.
 
+## Hostname
+The hostname that the phone must take on can be changed by reflashing the software. By default, the hostname is `n8n-pink-phone`.
+
 ## SD card
 The SD card must be formatted in FAT32 format.
 
