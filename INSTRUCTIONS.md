@@ -15,16 +15,22 @@ Once you have the SD card plugged into your computer, you can edit the following
 
 For how to fill in these files, see [WiFi](#wifi) and [Webhook](#webhook) respectively.
 
+If you want to change the sound that is played upon phone pickup, see [SD Card](#sd-card)
+
 ## General Workings
 The phone's higher level functioning is quite simple.
 
 While the horn is down, the phone is considered "idle". In this state, the phone will continuously check whether the horn is picked up or not.
 
-When the phone horn remains down, the phone will continuously look for un-uploaded feedback sound snippets. When it finds any, it will try uploading those to the specified webhook link. (See [Webhook](#webhook))
+When the phone horn remains down, the phone will look for un-uploaded feedback sound snippets. When it finds any, it will try uploading those to the specified webhook link. (See [Webhook](#webhook))
 
 When the phone horn gets picked up, the phone will start playing the pickup sound (See [SD Card](#sd-card)). The phone can be put back down during this, and in that case playback will stop and the phone will return to idle state. On the other hand, if playback is allowed to completely finish, the phone will start recording.
 
 If the phone horn is put down during recording, recording will stop. When the recorded sound snippet is shorter than 3 seconds, the snippet will be discarded automatically. Otherwise the sound snippet will be saved, marked as "un-uploaded", and the phone will return to its idle state.
+
+### Resetting
+If a reset of the phone is needed, there is a switch on the back bottom side of the phone. It can be reached without lifting up the phone. By default, this switch should be pushed all the way to the left. In this state, it doesn't do anything. If you push the switch all the way to the right, the phone will reset, and the phone will play a "Restarting" sound on its speaker. Once you hear this sound, push the switch back to the left. If the switch stays on the right, the phone will keep resetting.
+Note that this switch has 3 states, because it is simply a repurposed volume dial. Be sure that the switch is either pushed all the way to the left or to the right, and it doesn't remain in the middle state.
 
 ## Software
 The ESP32 has already been flashed with the software it needs. In the case it is necessary to change something and/or reflash the ESP32, the source Arduino IDE project can be found [here](https://github.com/mFieldHouses/n8n-phonecorder).
@@ -97,7 +103,7 @@ You can download profiles to install through [this link](https://www.vlsi.fi/fil
 ## Errors
 When the phone encounters an error, it will play a sound snippet according to what error occurred. Here is a full list of possible errors and their sounds:
 
-* **Single beep**: SD Card error. Is the SD card inserted in the SD card slot on the VS1053 breakout board?
+* **Single beep**: SD Card error. Is the SD card inserted in the SD card slot on the VS1053 breakout board? (This is a beep and not a voice snippet like the other errors, since those snippets are stored on the SD card)
 
 * “**Recording Plugin Error**”: OGG Recording plugin error. Is the plugin file in the right location and is it named correctly? (See [SD Card](#sd-card))
 
@@ -115,4 +121,8 @@ If the serial output does not clarify the issue, you can see if your issue is in
 
 1. Phone keeps stalling when uploading file
 
-This can be caused by the phone trying to upload a bad file. Check for all un-uploaded files and see if there are any obviously corrupt/bad ones, for example files that are 0B in size.
+This can be caused by the phone trying to upload a bad file. Check for all un-uploaded files and see if there are any obviously corrupt/bad ones, for example files that are 0B in size. Remove those and see if the issue has been fixed.
+
+2. Phone keeps saying "restarting"
+
+It is possible that the reset switch has not been pushed back to its default state, causing the phone to continuously reset. See [Resetting](#resetting) for more information.
