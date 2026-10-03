@@ -20,6 +20,8 @@ If you want to change the sound that is played upon phone pickup, see [SD Card](
 ## General Workings
 The phone's higher level functioning is quite simple.
 
+When the phone initially powers up, the recording LED flashes once. When it successfully finishes setting up, the recording LED flashes twice.
+
 While the horn is down, the phone is considered "idle". In this state, the phone will continuously check whether the horn is picked up or not.
 
 When the phone horn remains down, the phone will look for un-uploaded feedback sound snippets. When it finds any, it will try uploading those to the specified webhook link. (See [Webhook](#webhook))
