@@ -13,8 +13,6 @@
  ****************************************************/
 
 //TODO add recording timer to discard recordings smaller than 3 seconds
-//TODO add recording LED support
-//TODO add reset switch support
 
 #define USE_LOG_COPYING // When this is defined, log copying will be used. Comment out this line to disable log copying
 #define MAX_LOG_LINES 150 // The maximum amount of lines to remember when using log copying
@@ -46,6 +44,8 @@
 #define CARDCS 7
 #define DREQ 5
 #define HORN_SWITCH 16
+#define RECORDING_LED 17
+#define RESET_SWITCH 4
 
 // Required libraries
 // Most of these are all standard libraries and should be installed already alongside ESP32 boards, except for Adafruit_VS1053.h
@@ -155,6 +155,14 @@ void setup() {
     log_copy.push_back("Output log copying is disabled. You can re-enable it by uncommenting '#define USE_LOG_COPYING' in the first few lines of the program and reflashing the ESP32.");
 
   #endif
+
+  pinMode(RECORDING_LED, OUTPUT);
+
+  pinMode(RESET_SWITCH, INPUT_PULLUP);
+
+  if (!digitalRead(RESET_SWITCH)) {
+    Serial.println("RESET SWITCH");
+  }
 
   // Horn switch setup. Uses a pullup on the input and connects to ground when the horn is down. So 1 is horn up, 0 is horn down
   pinMode(HORN_SWITCH, INPUT_PULLUP);
@@ -272,6 +280,12 @@ void setup() {
 void loop() {
   // Update whether the horn is down or not
   horn_picked_up = digitalRead(HORN_SWITCH);
+
+  if (!digitalRead(RESET_SWITCH)) {
+    restart();
+  }
+
+  enableRecordingLight(phone_state == PhoneState::RECORDING);
 
   // Handle incoming HTTP requests
   server.handleClient();
@@ -908,4 +922,8 @@ bool enableRecordingMode() {
 // Calculates and returns the percentage of space that is used on the SD card
 float getSDCardSpaceUsedPercentage() {
   return ((float) SD.usedBytes()) / ((float) SD.totalBytes()) * 100.0;
+}
+
+void enableRecordingLight(bool enabled) {
+  digitalWrite(RECORDING_LED, enabled ? HIGH : LOW);
 }
