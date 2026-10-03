@@ -160,9 +160,9 @@ void setup() {
 
   pinMode(RESET_SWITCH, INPUT_PULLUP);
 
-  if (!digitalRead(RESET_SWITCH)) {
-    Serial.println("RESET SWITCH");
-  }
+  enableRecordingLight(true);
+  delay(200);
+  enableRecordingLight(false);
 
   // Horn switch setup. Uses a pullup on the input and connects to ground when the horn is down. So 1 is horn up, 0 is horn down
   pinMode(HORN_SWITCH, INPUT_PULLUP);
@@ -273,6 +273,14 @@ void setup() {
   SPRINTLN("\nSETUP DONE\n\n========================================\n");
 
   markSetupHeaderEndLine();
+
+  enableRecordingLight(true);
+  delay(200);
+  enableRecordingLight(false);
+  delay(200);
+  enableRecordingLight(true);
+  delay(200);
+  enableRecordingLight(false);
 }
 
 
