@@ -23,7 +23,7 @@
 #define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3" // POSIX timezone
 #define PHONE_HOSTNAME "n8n-pink-phone"
 
-#define UPLOAD_REATTEMPT_TIMEOUT 2000 // in ms. How long the phone will wait before reattempting to upload a file to the webhook after failing to upload
+#define UPLOAD_REATTEMPT_TIMEOUT 5000 // in ms. How long the phone will wait before reattempting to upload a file to the webhook after failing to upload
 
 #define RECORDING_PROFILE_PATH "/recording_profile.img" // Path to the .img file that will be used to encode .ogg files when recording
 
@@ -63,6 +63,7 @@
 enum PhoneState {IDLE, UPLOADING, PLAYING, RECORDING};
 PhoneState phone_state = PhoneState::IDLE;
 
+// Used for keeping track of whether the VS1053 is in recording or playback state
 enum PhoneMode {PLAYBACK, RECORD};
 PhoneMode phone_mode = PhoneMode::PLAYBACK;
 
@@ -307,7 +308,6 @@ void loop() {
 
         enablePlaybackMode();
 
-        musicPlayer.setPlaySpeed(20); // TODO remove this
         musicPlayer.startPlayingFile(PICKUP_SOUND_PATH);
 
         phone_state = PhoneState::PLAYING;
@@ -375,9 +375,6 @@ void loop() {
       if (horn_picked_up) { // If music is playing and the phone horn is still picked up
 
         if (!musicPlayer.playingMusic) { // If the track is done playing
-
-          musicPlayer.setPlaySpeed(1); // TODO remove
-
           if (!enableRecordingMode()) {
             break;
           }
@@ -823,6 +820,16 @@ String getTimeStampString() {
 
 
 
+// Returns time stamp as a specfically formatted string for log entries
+String getTimeString() {
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+
+  return padZero(String(timeinfo.tm_hour)) + ":" + padZero(String(timeinfo.tm_min)) + ":" + padZero(String(timeinfo.tm_sec));
+}
+
+
+
 // Returns the current status as a string to be used in handleStatusRequest
 String getStatusString() {
   switch (phone_state) {
@@ -842,16 +849,11 @@ String getStatusString() {
 
 // Returns how many recordings have been made in total, including uploaded files
 int getRecordedFilesCount() {
-  Serial.println("get recorded files count"); // TODO fix this
-
   File dir = SD.open("/recorded/");
   
   int count = 0;
 
   while (1) { // Search through all files
-    // if (!dir.isDirectory()) {
-    //   count++;
-    // }
     count++;
     dir = dir.openNextFile();
 
