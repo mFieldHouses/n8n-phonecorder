@@ -1,9 +1,8 @@
 ## Recommended tools for operation
 
 * Arduino IDE with ESP32 boards (package by Espressif, not the Arduino one) and the Adafruit_VS1053 library installed
-* Philips screwdriver(s)
+* Phillips head screwdriver(s)
 * MicroSD card slot/reader
-* Data-enabled USB type C cable
 
 ## Quick Setup
 Setting up the phone is quite simple. The only configuration that needs to be done is specifying WiFi credentials to be used, and a webhook URL to upload to. Both these configurations are done through files on the SD card.
