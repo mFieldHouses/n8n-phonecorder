@@ -27,16 +27,16 @@ When the phone horn remains down, the phone will look for un-uploaded feedback s
 
 When the phone horn gets picked up, the phone will start playing the pickup sound (See [SD Card](#sd-card)). The phone can be put back down during this, and in that case playback will stop and the phone will return to idle state. On the other hand, if playback is allowed to completely finish, the phone will start recording.
 
-If the phone horn is put down during recording, recording will stop. When the recorded sound snippet is shorter than 3 seconds, the snippet will be discarded automatically. Otherwise the sound snippet will be saved, marked as "un-uploaded", and the phone will return to its idle state.
+If the phone horn is put down during recording, recording will stop. The recorded sound snippet will be saved, marked as "un-uploaded", and the phone will return to its idle state.
 
 ### Resetting
-If a reset of the phone is needed, there is a switch on the back bottom side of the phone. It can be reached without lifting up the phone. By default, this switch should be pushed all the way to the left. In this state, it doesn't do anything. If you push the switch all the way to the right, the phone will reset, and the phone will play a "Restarting" sound on its speaker. Once you hear this sound, push the switch back to the left. If the switch stays on the right, the phone will keep resetting.
+If a reset of the phone is needed, there is a switch on the back bottom side of the phone. It can be reached without lifting up the phone. By default, this switch should be pushed all the way to the left (when viewing the phone from the front). In this state, it doesn't do anything. If you push the switch all the way to the right, the phone will reset, and the phone will play a "Restarting" sound on its speaker. Once you hear this sound, push the switch back to the left. If the switch stays on the right, the phone will keep resetting.
 Note that this switch has 3 states, because it is simply a repurposed volume dial. Be sure that the switch is either pushed all the way to the left or to the right, and it doesn't remain in the middle state.
 
 ## Software
-The ESP32 has already been flashed with the software it needs. In the case it is necessary to change something and/or reflash the ESP32, the source Arduino IDE project can be found [here](https://github.com/mFieldHouses/n8n-phonecorder).
+The ESP32 has already been flashed with the software it needs. In the case it is necessary to change something and/or reflash the ESP32, the source Arduino IDE project can be found in this repository.
 
-The phone runs on an ESP32 module, the <b>Beetle ESP32-C6</b> by DFRobot. When flashing a new program, make sure that board has been selected. It should come with the ESP32 boards package by Espressif Systems. If Serial communication with the Beetle via the Serial monitor is needed, make sure “USB CDC on boot” is enabled in the Tools menu in the Arduino IDE. No other settings need to be changed.
+The phone runs on an ESP32 module, the <b>Beetle ESP32-C6</b> by DFRobot. When flashing a new program, make sure that board has been selected. It should come with the ESP32 boards package by Espressif Systems. If Serial communication with the Beetle via the Serial monitor is needed, make sure “USB CDC on boot” is enabled in the Tools menu in the Arduino IDE. No other settings in the Tools menu need to be changed.
 
 The “Adafruit VS1053” library is required for this project to compile correctly. Install it if you do not have it yet.
 
@@ -61,7 +61,7 @@ The required file structure is as follows:
 * /recording_profile.img (OGG recording profile/plugin. See [Recording](#recording))
 
 ## Status API
-When running, the phone exposes an API endpoint which will return data about its status, in JSON format. This API is available both at _\<hostname\>_ and at _\<hostname\>/api/status_.
+When running, the phone exposes an API endpoint which will return data about its status, in JSON format. This API is available both at the main page and at _/api/status_.
 
 A status message follows a certain structure:
 
@@ -78,7 +78,7 @@ A status message follows a certain structure:
 When the phone is playing or recording sound, it will not generate the full status report, as doing so can cause audible hiccups in playback and recording.
 
 ## Output Log
-The phone publishes a simple copy of its serial output to _\<hostname\>/output_. This log contains some additional information about the phones’ functioning.
+The phone publishes a simple copy of its serial output to _/output_. This log contains some additional information about the phones’ functioning.
 
 ## Webhook
 The phone will try to upload its recorded files to a webhook via HTTP POST requests. You can provide the phone with a link to the webhook in <b>webhook.txt</b>. 
