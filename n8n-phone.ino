@@ -243,7 +243,9 @@ void setup() {
 
     if (Serial.available()) {
       if (Serial.find(WIFI_CONFIGURATION_MODE_COMMAND)) {
-        SPRINTLN("\nEntered WiFi configuration mode\nUse any of the following commands:\n\t- ssid=<ssid>\n\t- password=<password>\n\t- save_credentials");
+        SPRINTLN("\nEntered WiFi configuration mode\nUse any of the following commands:\n\t- ssid=<ssid>\n\t- password=<password>\n\t- savecreds\n\t- cancel");
+
+        Serial.flush(); // Clear serial buffers
 
         while (true) {
           if (Serial.available()) {
@@ -253,31 +255,44 @@ void setup() {
                 buffer += (char) Serial.read();
             }
 
+            buffer = buffer.substring(0, buffer.length() - 1); // Remove newline character
+
+            SPRINTLN("\n> " + buffer);
+
             if (buffer.indexOf("ssid=") != -1) {
               int i = buffer.indexOf("=");
 
-              String new_ssid = buffer.substring(i + 1, buffer.length() - 1); // Remove newline from end of input
+              String new_ssid = buffer.substring(i + 1);
 
               //Serial.println(new_ssid);
               SPRINTLN("WiFi SSID set to " + new_ssid);
-              SPRINTLN("Use command 'save_credentials' to store these credentials onto wifi.txt.\n");
+              SPRINTLN("Use command 'savecreds' to store new credentials onto wifi.txt, or use command 'cancel' to cancel.");
               ssid = new_ssid;
             }
 
             else if (buffer.indexOf("password=") != -1) {
               int i = buffer.indexOf("=");
 
-              String new_password = buffer.substring(i + 1, buffer.length() - 1); // Remove newline from end of input
+              String new_password = buffer.substring(i + 1);
 
               SPRINTLN("WiFi password set to " + new_password);
-              SPRINTLN("Use command 'save_credentials' to store these credentials onto wifi.txt.\n");
+              SPRINTLN("Use command 'savecreds' to store new credentials onto wifi.txt, or use command 'cancel' to cancel.");
               password = new_password;
             }
 
-            else if (buffer == String("save_credentials\n")) {
+            else if (buffer == String("savecreds")) {
               storeWifiCredentials(ssid, password);
               SPRINTLN("WiFi credentials were stored. Restarting now.");
               restart();
+            }
+
+            else if (buffer == String("cancel")) {
+              SPRINTLN("Cancelled. Restarting now.");
+              restart();
+            }
+
+            else {
+              SPRINTLN("Command was not recognized. Do not put spaces in any commands. (e.g. 'ssid = <ssid>' is wrong because of the spaces)");
             }
           }
 
