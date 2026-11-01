@@ -12,7 +12,16 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 
-//TODO add recording timer to discard recordings smaller than 3 seconds
+
+// Uncomment the next line to enable manual WiFi credentials overriding.
+// This means that the credentials retrieved from 
+//#define MANUAL_WIFI_CREDENTIALS_OVERRIDE
+
+// Fill out these strings with the needed WiFi credentials, in case WiFi credentials overriding is enabled.
+// #define WIFI_SSID_OVERRIDE ""
+// #define WIFI_PASSWORD_OVERRIDE ""
+
+
 
 #define USE_LOG_COPYING // When this is defined, log copying will be used. Comment out this line to disable log copying
 #define MAX_LOG_LINES 150 // The maximum amount of lines to remember when using log copying
@@ -22,6 +31,8 @@
 
 #define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3" // POSIX timezone
 #define PHONE_HOSTNAME "n8n-pink-phone"
+
+#define WIFI_CONFIGURATION_MODE_COMMAND "wificonf"
 
 #define UPLOAD_REATTEMPT_TIMEOUT 5000 // in ms. How long the phone will wait before reattempting to upload a file to the webhook after failing to upload
 
@@ -203,7 +214,7 @@ void setup() {
   SPRINT("SSID: "); SPRINTLN(ssid);
   SPRINT("Password: "); SPRINTLN(password);
   
-  SPRINT("\nattempting to connect to WiFi");
+  SPRINT(String("\nattempting to connect to WiFi. WiFi configuration mode is also available now. (Command: ") + String(WIFI_CONFIGURATION_MODE_COMMAND) + ")");
 
   // Setup WiFi
   WiFi.setHostname(PHONE_HOSTNAME);
@@ -228,6 +239,52 @@ void setup() {
       SPRINTLN("Unable to find WiFi, restarting");
       speakerNotify(NotificationType::WIFI_ERROR);
       restart();
+    }
+
+    if (Serial.available()) {
+      if (Serial.find(WIFI_CONFIGURATION_MODE_COMMAND)) {
+        SPRINTLN("\nEntered WiFi configuration mode\nUse any of the following commands:\n\t- ssid=<ssid>\n\t- password=<password>\n\t- save_credentials");
+
+        while (true) {
+          if (Serial.available()) {
+            String buffer = "";
+
+            while (Serial.available()) {
+                buffer += (char) Serial.read();
+            }
+
+            if (buffer.indexOf("ssid=") != -1) {
+              int i = buffer.indexOf("=");
+
+              String new_ssid = buffer.substring(i + 1, buffer.length() - 1); // Remove newline from end of input
+
+              //Serial.println(new_ssid);
+              SPRINTLN("WiFi SSID set to " + new_ssid);
+              SPRINTLN("Use command 'save_credentials' to store these credentials onto wifi.txt.\n");
+              ssid = new_ssid;
+            }
+
+            else if (buffer.indexOf("password=") != -1) {
+              int i = buffer.indexOf("=");
+
+              String new_password = buffer.substring(i + 1, buffer.length() - 1); // Remove newline from end of input
+
+              SPRINTLN("WiFi password set to " + new_password);
+              SPRINTLN("Use command 'save_credentials' to store these credentials onto wifi.txt.\n");
+              password = new_password;
+            }
+
+            else if (buffer == String("save_credentials\n")) {
+              storeWifiCredentials(ssid, password);
+              SPRINTLN("WiFi credentials were stored. Restarting now.");
+              restart();
+            }
+          }
+
+          delay(1);
+          //SPRINTLN("loop");
+        }
+      }
     }
 
     delay(100);
@@ -638,6 +695,21 @@ void retrieveWifiCredentials(String &ssid_str, String &password_str) {
 
   ssid_str = ssid_line.substring(5); // substring starting after "ssid="
   password_str = password_line.substring(9); // substring starting after "password="
+}
+
+
+
+void storeWifiCredentials(String &ssid_str, String &password_str) {
+  if (!SD.exists("/wifi.txt")) {
+    speakerNotify(NotificationType::WIFI_ERROR);
+    return;
+  }
+
+  SD.remove("/wifi.txt");
+
+  File creds_file = SD.open("/wifi.txt", FILE_WRITE);
+  creds_file.println("ssid=" + ssid_str);
+  creds_file.print("password=" + password_str);
 }
 
 
